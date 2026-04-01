@@ -12,15 +12,41 @@ function nextId(): string {
   return `msg-${Date.now()}-${++msgIdCounter}`;
 }
 
+function formatToolUse(name: string, input: Record<string, unknown>): string {
+  switch (name) {
+    case "Read":
+      return `Reading ${input.file_path || "file"}`;
+    case "Write":
+      return `Writing ${input.file_path || "file"}`;
+    case "Edit":
+      return `Editing ${input.file_path || "file"}`;
+    case "Bash":
+      return `$ ${typeof input.command === "string" ? input.command.slice(0, 120) : "..."}`;
+    case "Glob":
+      return `Finding files: ${input.pattern || "..."}`;
+    case "Grep":
+      return `Searching: ${input.pattern || "..."}`;
+    case "WebSearch":
+      return `Searching web: ${input.query || "..."}`;
+    case "WebFetch":
+      return `Fetching: ${input.url || "..."}`;
+    case "TodoWrite":
+      return `Updating tasks`;
+    case "Agent":
+      return `Spawning agent: ${input.description || "..."}`;
+    default:
+      return `${name}`;
+  }
+}
+
 export function useTanu(config: ConnectionConfig | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState<string>("disconnected");
   const [pendingPermission, setPendingPermission] = useState<PendingPermission | null>(null);
   const clientRef = useRef<TanuBridgeClient | null>(null);
-  const streamingRef = useRef<{ uuid: string; text: string } | null>(null);
+  const streamingIdRef = useRef<string | null>(null);
 
-  // Connect to bridge
   useEffect(() => {
     if (!config) return;
 
@@ -30,10 +56,11 @@ export function useTanu(config: ConnectionConfig | null) {
     const unsubMsg = client.onMessage((msg: BridgeMessage) => {
       switch (msg.type) {
         case "stream_delta": {
-          if (!streamingRef.current || streamingRef.current.uuid !== msg.uuid) {
-            // New streaming message
+          if (!msg.text) break;
+          if (!streamingIdRef.current) {
+            // Start a new streaming bubble
             const id = nextId();
-            streamingRef.current = { uuid: msg.uuid, text: msg.text };
+            streamingIdRef.current = id;
             setMessages((prev) => [
               ...prev,
               {
@@ -45,40 +72,41 @@ export function useTanu(config: ConnectionConfig | null) {
               },
             ]);
           } else {
-            // Append to existing streaming message
-            streamingRef.current.text += msg.text;
-            const accumulated = streamingRef.current.text;
+            // Append to existing streaming bubble
+            const streamId = streamingIdRef.current;
             setMessages((prev) => {
-              const last = prev[prev.length - 1];
-              if (last?.isStreaming) {
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, content: accumulated },
-                ];
-              }
-              return prev;
+              const idx = prev.findIndex((m) => m.id === streamId);
+              if (idx === -1) return prev;
+              const updated = [...prev];
+              updated[idx] = {
+                ...updated[idx],
+                content: updated[idx].content + msg.text,
+              };
+              return updated;
             });
           }
           break;
         }
 
         case "assistant_text": {
-          // Final assembled message — replace streaming message
-          streamingRef.current = null;
-          setMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.isStreaming) {
-              return [
-                ...prev.slice(0, -1),
-                {
-                  ...last,
-                  content: msg.text,
-                  isStreaming: false,
-                },
-              ];
-            }
-            // No streaming message to replace, add new
-            return [
+          // Final assembled message — replace the streaming bubble
+          const streamId = streamingIdRef.current;
+          streamingIdRef.current = null;
+
+          if (streamId) {
+            setMessages((prev) => {
+              const idx = prev.findIndex((m) => m.id === streamId);
+              if (idx === -1) return prev;
+              const updated = [...prev];
+              updated[idx] = {
+                ...updated[idx],
+                content: msg.text,
+                isStreaming: false,
+              };
+              return updated;
+            });
+          } else {
+            setMessages((prev) => [
               ...prev,
               {
                 id: nextId(),
@@ -87,8 +115,25 @@ export function useTanu(config: ConnectionConfig | null) {
                 timestamp: new Date(),
                 isStreaming: false,
               },
-            ];
-          });
+            ]);
+          }
+          break;
+        }
+
+        case "tool_use": {
+          // Format a nice summary of the tool call
+          const summary = formatToolUse(msg.tool_name, msg.tool_input);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: nextId(),
+              role: "tool",
+              content: summary,
+              timestamp: new Date(),
+              toolName: msg.tool_name,
+              toolInput: msg.tool_input,
+            },
+          ]);
           break;
         }
 
@@ -103,16 +148,17 @@ export function useTanu(config: ConnectionConfig | null) {
         }
 
         case "result": {
-          streamingRef.current = null;
+          streamingIdRef.current = null;
           setStatus("idle");
           if (msg.cost_usd > 0) {
             setMessages((prev) => {
-              const last = prev[prev.length - 1];
-              if (last?.role === "assistant") {
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, cost: msg.cost_usd },
-                ];
+              // Attach cost to last assistant message
+              for (let i = prev.length - 1; i >= 0; i--) {
+                if (prev[i].role === "assistant") {
+                  const updated = [...prev];
+                  updated[i] = { ...updated[i], cost: msg.cost_usd };
+                  return updated;
+                }
               }
               return prev;
             });
@@ -122,6 +168,9 @@ export function useTanu(config: ConnectionConfig | null) {
 
         case "status": {
           setStatus(msg.status);
+          if (msg.status === "thinking" && !streamingIdRef.current) {
+            // Reset for new turn
+          }
           break;
         }
       }
@@ -147,6 +196,9 @@ export function useTanu(config: ConnectionConfig | null) {
 
   const sendMessage = useCallback((content: string) => {
     if (!clientRef.current) return;
+
+    // Reset streaming state for new turn
+    streamingIdRef.current = null;
 
     setMessages((prev) => [
       ...prev,
@@ -177,7 +229,7 @@ export function useTanu(config: ConnectionConfig | null) {
 
   const clearMessages = useCallback(() => {
     setMessages([]);
-    streamingRef.current = null;
+    streamingIdRef.current = null;
   }, []);
 
   return {

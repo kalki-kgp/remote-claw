@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChatBubble } from "../components/ChatBubble";
@@ -34,19 +36,23 @@ export function ChatScreen({ config, onDisconnect }: Props) {
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom on new messages or content changes
   useEffect(() => {
     if (messages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+      }, 50);
     }
-  }, [messages.length, messages[messages.length - 1]?.content]);
+  }, [messages.length, messages[messages.length - 1]?.content.length]);
 
   const isThinking = status === "thinking";
 
   return (
-    <View style={[styles.safe, { paddingTop: insets.top }]}>
+    <KeyboardAvoidingView
+      style={[styles.safe, { paddingTop: insets.top }]}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={0}
+    >
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -73,9 +79,10 @@ export function ChatScreen({ config, onDisconnect }: Props) {
         renderItem={({ item }) => <ChatBubble message={item} />}
         style={styles.list}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>{'<3'}</Text>
             <Text style={styles.emptyText}>
               hey babe, what are we building today?
             </Text>
@@ -101,7 +108,7 @@ export function ChatScreen({ config, onDisconnect }: Props) {
           disabled={!connected}
         />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -160,11 +167,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 40,
-  },
-  emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 16,
-    color: "#6C5CE7",
   },
   emptyText: {
     color: "#8888AA",

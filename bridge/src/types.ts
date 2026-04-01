@@ -166,6 +166,12 @@ export interface MobileSessionResult {
   duration_ms: number;
 }
 
+export interface MobileToolUse {
+  type: "tool_use";
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+}
+
 export interface MobileToolProgress {
   type: "tool_progress";
   content: string;
@@ -183,5 +189,6 @@ export type MobileOutbound =
   | MobileStreamDelta
   | MobilePermissionRequest
   | MobileSessionResult
+  | MobileToolUse
   | MobileToolProgress
   | MobileStatus;

@@ -5,8 +5,7 @@ import {
   TouchableOpacity,
   Text,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
+  ScrollView,
 } from "react-native";
 
 interface Props {
@@ -15,6 +14,14 @@ interface Props {
   isThinking: boolean;
   disabled: boolean;
 }
+
+const SHORTCUTS = [
+  { label: "Ctrl+C", action: "interrupt" },
+  { label: "/compact", action: "/compact" },
+  { label: "/clear", action: "/clear" },
+  { label: "/cost", action: "/cost" },
+  { label: "/help", action: "/help" },
+];
 
 export function ChatInput({ onSend, onInterrupt, isThinking, disabled }: Props) {
   const [text, setText] = useState("");
@@ -26,40 +33,68 @@ export function ChatInput({ onSend, onInterrupt, isThinking, disabled }: Props) 
     setText("");
   };
 
+  const handleShortcut = (action: string) => {
+    if (action === "interrupt") {
+      onInterrupt();
+    } else {
+      onSend(action);
+    }
+  };
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={90}
-    >
-      <View style={styles.container}>
-        {isThinking && (
-          <TouchableOpacity style={styles.interruptBtn} onPress={onInterrupt}>
-            <Text style={styles.interruptText}>Stop</Text>
-          </TouchableOpacity>
-        )}
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            value={text}
-            onChangeText={setText}
-            placeholder={disabled ? "Connecting..." : "Message Tanu..."}
-            placeholderTextColor="#555570"
-            multiline
-            maxLength={10000}
-            editable={!disabled}
-            onSubmitEditing={handleSend}
-            blurOnSubmit={false}
-          />
+    <View style={styles.container}>
+      {/* Shortcut buttons */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.shortcuts}
+        contentContainerStyle={styles.shortcutsContent}
+      >
+        {SHORTCUTS.map((s) => (
           <TouchableOpacity
-            style={[styles.sendBtn, (!text.trim() || disabled) && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!text.trim() || disabled}
+            key={s.label}
+            style={[
+              styles.shortcutBtn,
+              s.action === "interrupt" && isThinking && styles.shortcutBtnActive,
+            ]}
+            onPress={() => handleShortcut(s.action)}
           >
-            <Text style={styles.sendIcon}>{'>'}</Text>
+            <Text
+              style={[
+                styles.shortcutText,
+                s.action === "interrupt" && isThinking && styles.shortcutTextActive,
+              ]}
+            >
+              {s.label}
+            </Text>
           </TouchableOpacity>
-        </View>
+        ))}
+      </ScrollView>
+
+      {/* Input row */}
+      <View style={styles.inputRow}>
+        <TextInput
+          style={styles.input}
+          value={text}
+          onChangeText={setText}
+          placeholder={disabled ? "Connecting..." : "Message Tanu..."}
+          placeholderTextColor="#555570"
+          multiline
+          maxLength={10000}
+          editable={!disabled}
+          returnKeyType="send"
+          blurOnSubmit
+          onSubmitEditing={handleSend}
+        />
+        <TouchableOpacity
+          style={[styles.sendBtn, (!text.trim() || disabled) && styles.sendBtnDisabled]}
+          onPress={handleSend}
+          disabled={!text.trim() || disabled}
+        >
+          <Text style={styles.sendIcon}>{'>'}</Text>
+        </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -69,21 +104,36 @@ const styles = StyleSheet.create({
     borderTopColor: "#2D2D44",
     backgroundColor: "#12121C",
     paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
+    paddingTop: 6,
+    paddingBottom: 8,
   },
-  interruptBtn: {
-    alignSelf: "center",
-    backgroundColor: "#E74C3C",
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    borderRadius: 14,
+  shortcuts: {
     marginBottom: 8,
   },
-  interruptText: {
-    color: "#FFF",
-    fontSize: 13,
+  shortcutsContent: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  shortcutBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: "#1E1E2E",
+    borderWidth: 1,
+    borderColor: "#2D2D44",
+  },
+  shortcutBtnActive: {
+    backgroundColor: "#E74C3C",
+    borderColor: "#E74C3C",
+  },
+  shortcutText: {
+    color: "#8888AA",
+    fontSize: 12,
     fontWeight: "600",
+    fontFamily: "monospace",
+  },
+  shortcutTextActive: {
+    color: "#FFF",
   },
   inputRow: {
     flexDirection: "row",

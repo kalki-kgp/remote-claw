@@ -47,6 +47,12 @@ export interface ResultMessage {
   duration_ms: number;
 }
 
+export interface ToolUseMessage {
+  type: "tool_use";
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+}
+
 export interface ToolProgressMessage {
   type: "tool_progress";
   content: string;
@@ -64,17 +70,20 @@ export type BridgeMessage =
   | StreamDeltaMessage
   | PermissionRequestMessage
   | ResultMessage
+  | ToolUseMessage
   | ToolProgressMessage
   | StatusMessage;
 
 // Chat UI types
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
   cost?: number;
+  toolName?: string;
+  toolInput?: Record<string, unknown>;
 }
 
 export interface PendingPermission {

@@ -8,6 +8,18 @@ interface Props {
 
 export const ChatBubble = memo(function ChatBubble({ message }: Props) {
   const isUser = message.role === "user";
+  const isTool = message.role === "tool";
+
+  if (isTool) {
+    return (
+      <View style={styles.toolRow}>
+        <View style={styles.toolDot} />
+        <Text style={styles.toolText} numberOfLines={2}>
+          {message.content}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.row, isUser && styles.rowUser]}>
@@ -85,5 +97,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 6,
     textAlign: "right",
+  },
+  // Tool call styles
+  toolRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 2,
+    marginHorizontal: 16,
+    gap: 8,
+  },
+  toolDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#F39C12",
+  },
+  toolText: {
+    color: "#8888AA",
+    fontSize: 12,
+    fontFamily: "monospace",
+    flex: 1,
   },
 });

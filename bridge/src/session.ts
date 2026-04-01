@@ -209,7 +209,18 @@ export class SessionManager extends EventEmitter {
       }
 
       case "assistant": {
-        // Full assembled assistant message
+        // Emit tool_use blocks first
+        for (const block of msg.message.content) {
+          if (block.type === "tool_use") {
+            this.emit(`message:${sessionId}`, {
+              type: "tool_use",
+              tool_name: block.name,
+              tool_input: block.input,
+            } satisfies MobileOutbound);
+          }
+        }
+
+        // Then emit text
         const textBlocks = msg.message.content.filter(
           (b): b is { type: "text"; text: string } => b.type === "text"
         );
@@ -219,12 +230,14 @@ export class SessionManager extends EventEmitter {
         this.streamingUUIDs.delete(sessionId);
         this.streamingTexts.delete(sessionId);
 
-        this.emit(`message:${sessionId}`, {
-          type: "assistant_text",
-          text: fullText,
-          uuid: msg.uuid,
-          is_partial: false,
-        } satisfies MobileOutbound);
+        if (fullText) {
+          this.emit(`message:${sessionId}`, {
+            type: "assistant_text",
+            text: fullText,
+            uuid: msg.uuid,
+            is_partial: false,
+          } satisfies MobileOutbound);
+        }
         break;
       }
 
